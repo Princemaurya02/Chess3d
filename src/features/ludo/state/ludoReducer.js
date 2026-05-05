@@ -1,87 +1,75 @@
-import {
-  COLORS, TOKENS_PER_PLAYER, TOKEN_BASE, TOKEN_COMPLETE,
-} from '../engine/ludoConstants';
-import {
-  rollDice, getMoveableTokens, calcNewPosition,
-  findTokenAtCell, isWinner,
-} from '../engine/ludoEngine';
+import { COLORS, TOKENS_PER_PLAYER, TOKEN_BASE, TOKEN_COMPLETE } from '../engine/ludoConstants';
+import { rollDice, getMoveableTokens, calcNewPos, findCapture, getTokenCoords, isWinner } from '../engine/ludoEngine';
 
-// ─── Action Types ─────────────────────────────────────────────────────────────
 export const ACTIONS = {
-  START_GAME:    'START_GAME',
-  ROLL_DICE:     'ROLL_DICE',
-  SELECT_TOKEN:  'SELECT_TOKEN',
-  NEXT_TURN:     'NEXT_TURN',
-  GAME_OVER:     'GAME_OVER',
+  START_GAME:   'START_GAME',
+  ROLL_DICE:    'ROLL_DICE',
+  SELECT_TOKEN: 'SELECT_TOKEN',
+  NEXT_TURN:    'NEXT_TURN',
 };
 
-// ─── Initial State ────────────────────────────────────────────────────────────
-function makeInitialPlayers(numPlayers) {
-  const activePlayers = COLORS.slice(0, numPlayers);
-  const players = {};
-  COLORS.forEach(color => {
-    players[color] = {
-      tokens: Array(TOKENS_PER_PLAYER).fill(TOKEN_BASE),
-      score: 0,
-      isActive: activePlayers.includes(color),
-    };
+function makePlayers(numPlayers) {
+  const active = COLORS.slice(0, numPlayers);
+  const p = {};
+  COLORS.forEach(c => {
+    p[c] = { tokens: Array(TOKENS_PER_PLAYER).fill(TOKEN_BASE), isActive: active.includes(c) };
   });
-  return players;
+  return p;
 }
 
 export function getInitialState(numPlayers = 4) {
   return {
-    phase: 'idle',       // idle | playing | over
+    phase: 'idle',
     numPlayers,
-    players: makeInitialPlayers(numPlayers),
+    players: makePlayers(numPlayers),
     turnOrder: COLORS.slice(0, numPlayers),
-    currentTurn: 0,      // index into turnOrder
-    dice: null,          // 1-6 or null
+    currentTurn: 0,
+    dice: null,
     diceRolled: false,
-    moveableTokens: [],  // token indices that can move
+    moveableTokens: [],
     selectedToken: null,
     winner: null,
-    sixStreak: 0,        // consecutive sixes rolled
-    lastCapture: null,   // { color, tokenIdx } for animation
+    sixStreak: 0,
+    lastCapture: null,
+    _autoNext: false,
+    nextTurn: 0,
   };
 }
 
-// ─── Reducer ─────────────────────────────────────────────────────────────────
+function nextTurnIdx(state, wasExtra) {
+  if (wasExtra) return state.currentTurn;
+  return (state.currentTurn + 1) % state.numPlayers;
+}
+
 export function ludoReducer(state, action) {
   switch (action.type) {
 
-    case ACTIONS.START_GAME: {
+    case ACTIONS.START_GAME:
       return { ...getInitialState(action.payload.numPlayers), phase: 'playing' };
-    }
 
     case ACTIONS.ROLL_DICE: {
       if (state.phase !== 'playing' || state.diceRolled) return state;
-      const currentColor = state.turnOrder[state.currentTurn];
-      const player = state.players[currentColor];
+      const color = state.turnOrder[state.currentTurn];
       const dice = rollDice();
-      const moveable = getMoveableTokens(player, dice);
-
-      // No valid moves → pass turn (unless rolled 6)
+      // Three 6s in a row → forfeit
+      if (dice === 6 && state.sixStreak >= 2) {
+        return {
+          ...state, dice, diceRolled: true,
+          sixStreak: 0, moveableTokens: [], _autoNext: true,
+          nextTurn: (state.currentTurn + 1) % state.numPlayers,
+        };
+      }
+      const moveable = getMoveableTokens(state.players[color], dice);
       if (moveable.length === 0) {
-        const nextTurn = getNextTurn(state, dice);
         return {
-          ...state, dice, diceRolled: true,
-          moveableTokens: [],
-          // After short delay, auto-advance turn
-          _autoNext: true,
-          nextTurn,
+          ...state, dice, diceRolled: true, moveableTokens: [],
+          _autoNext: true, nextTurn: (state.currentTurn + 1) % state.numPlayers,
         };
       }
-
-      // If only one moveable token → auto-select
-      if (moveable.length === 1) {
-        return {
-          ...state, dice, diceRolled: true,
-          moveableTokens: moveable, selectedToken: moveable[0],
-        };
-      }
-
-      return { ...state, dice, diceRolled: true, moveableTokens: moveable, selectedToken: null };
+      return {
+        ...state, dice, diceRolled: true, moveableTokens: moveable,
+        selectedToken: moveable.length === 1 ? moveable[0] : null,
+      };
     }
 
     case ACTIONS.SELECT_TOKEN: {
@@ -89,86 +77,57 @@ export function ludoReducer(state, action) {
       const { tokenIdx } = action.payload;
       if (!state.moveableTokens.includes(tokenIdx)) return state;
 
-      const currentColor = state.turnOrder[state.currentTurn];
-      const player = state.players[currentColor];
-      const oldPos = player.tokens[tokenIdx];
-      const newPos = calcNewPosition(oldPos, state.dice);
+      const color = state.turnOrder[state.currentTurn];
+      const oldPos = state.players[color].tokens[tokenIdx];
+      const newPos = calcNewPos(oldPos, state.dice);
+      const newCoords = getTokenCoords(color, newPos);
 
-      // Check for capture
+      // Capture check (only on main path)
       let capture = null;
-      if (newPos < 52) { // only on main path
-        capture = findTokenAtCell(state.players, currentColor, newPos);
+      if (newPos < 52) {
+        capture = findCapture(state.players, color, newCoords, newPos);
       }
 
-      // Build new player state
-      const newTokens = [...player.tokens];
+      // Apply move
+      const newTokens = [...state.players[color].tokens];
       newTokens[tokenIdx] = newPos;
-      const newPlayers = {
-        ...state.players,
-        [currentColor]: { ...player, tokens: newTokens },
-      };
+      let newPlayers = { ...state.players, [color]: { ...state.players[color], tokens: newTokens } };
 
-      // Apply capture: send opponent token back to base
+      // Apply capture
       if (capture) {
-        const capPlayer = newPlayers[capture.color];
-        const capTokens = [...capPlayer.tokens];
-        capTokens[capture.tokenIdx] = TOKEN_BASE;
-        newPlayers[capture.color] = { ...capPlayer, tokens: capTokens };
+        const ct = [...newPlayers[capture.color].tokens];
+        ct[capture.tokenIdx] = TOKEN_BASE;
+        newPlayers = { ...newPlayers, [capture.color]: { ...newPlayers[capture.color], tokens: ct } };
       }
 
-      // Check win
+      // Win?
       if (isWinner(newTokens)) {
-        return {
-          ...state, players: newPlayers,
-          phase: 'over', winner: currentColor,
-          diceRolled: false, moveableTokens: [], selectedToken: null,
-          lastCapture: capture,
-        };
+        return { ...state, players: newPlayers, phase: 'over', winner: color, diceRolled: false, moveableTokens: [], dice: null };
       }
 
-      // Extra turn on 6 or capture
-      const extraTurn = state.dice === 6 || capture !== null;
-      const nextTurn = extraTurn ? state.currentTurn : getNextTurn(state, state.dice);
+      const extraTurn = state.dice === 6 || !!capture;
+      const newSixStreak = state.dice === 6 ? state.sixStreak + 1 : 0;
 
       return {
-        ...state,
-        players: newPlayers,
-        diceRolled: false,
-        dice: null,
-        moveableTokens: [],
-        selectedToken: null,
-        currentTurn: nextTurn,
+        ...state, players: newPlayers,
+        diceRolled: false, dice: null,
+        moveableTokens: [], selectedToken: null,
         lastCapture: capture,
-        sixStreak: state.dice === 6 ? state.sixStreak + 1 : 0,
+        sixStreak: newSixStreak,
+        currentTurn: extraTurn ? state.currentTurn : (state.currentTurn + 1) % state.numPlayers,
       };
     }
 
-    case ACTIONS.NEXT_TURN: {
+    case ACTIONS.NEXT_TURN:
       return {
         ...state,
-        currentTurn: action.payload.nextTurn ?? getNextTurn(state, state.dice),
-        diceRolled: false,
-        dice: null,
-        moveableTokens: [],
-        selectedToken: null,
-        _autoNext: false,
-        lastCapture: null,
+        currentTurn: action.payload?.nextTurn ?? (state.currentTurn + 1) % state.numPlayers,
+        diceRolled: false, dice: null,
+        moveableTokens: [], selectedToken: null,
+        _autoNext: false, lastCapture: null,
       };
-    }
-
-    case ACTIONS.GAME_OVER: {
-      return { ...state, phase: 'over', winner: action.payload.winner };
-    }
 
     default:
       return state;
   }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function getNextTurn(state, dice) {
-  // 3 sixes in a row → forfeit turn
-  if (dice === 6 && state.sixStreak >= 2) return (state.currentTurn + 1) % state.numPlayers;
-  // normal next
-  return (state.currentTurn + 1) % state.numPlayers;
 }
