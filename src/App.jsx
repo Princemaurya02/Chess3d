@@ -6,38 +6,35 @@ import GameScreen from './screens/GameScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import OnlineScreen from './screens/OnlineScreen';
+import LudoGame from './features/ludo/pages/LudoGame';
 
-// Auto-redirect to /online if URL contains ?room=...
 function RoomDetector() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-
   useEffect(() => {
     const room = searchParams.get('room');
-    if (room && pathname !== '/online') {
-      navigate(`/online?room=${room}`);
-    }
-  }, []); // only on mount
-
+    if (room && pathname !== '/online') navigate(`/online?room=${room}`);
+  }, []);
   return null;
 }
 
 function AppContent() {
   const { pathname } = useLocation();
-  const isGame = pathname === '/game';
+  const isFullscreen = pathname === '/game' || pathname === '/ludo';
 
   return (
     <div className="app-shell">
       <RoomDetector />
       <Routes>
-        <Route path="/"        element={<HomeScreen />} />
-        <Route path="/game"    element={<GameScreen />} />
-        <Route path="/online"  element={<OnlineScreen />} />
-        <Route path="/settings"element={<SettingsScreen />} />
-        <Route path="/profile" element={<ProfileScreen />} />
+        <Route path="/"         element={<HomeScreen />} />
+        <Route path="/game"     element={<GameScreen />} />
+        <Route path="/online"   element={<OnlineScreen />} />
+        <Route path="/ludo"     element={<LudoGame />} />
+        <Route path="/settings" element={<SettingsScreen />} />
+        <Route path="/profile"  element={<ProfileScreen />} />
       </Routes>
-      {!isGame && <BottomNav />}
+      {!isFullscreen && <BottomNav />}
     </div>
   );
 }
