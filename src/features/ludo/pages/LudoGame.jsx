@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useLudo } from '../hooks/useLudo';
 import LudoBoard from '../components/LudoBoard';
 import LudoDice from '../components/LudoDice';
-import { COLORS, TOKENS_PER_PLAYER, TOKEN_COMPLETE } from '../engine/ludoConstants';
+import { COLORS, DONE } from '../engine/ludoConstants';
 import { IoArrowBack, IoRefresh } from 'react-icons/io5';
 
 const PC = {
@@ -15,7 +15,7 @@ const PC = {
 
 // ─── Token progress pips ─────────────────────────────────────────────────────
 function TokenPips({ tokens, color }) {
-  const done = tokens.filter(t => t === TOKEN_COMPLETE).length;
+  const done = tokens.filter(t => t === DONE).length;
   return (
     <div style={{ display:'flex', gap: 3, marginTop: 3 }}>
       {tokens.map((t, i) => (
@@ -190,19 +190,19 @@ export default function LudoGame() {
   const navigate = useNavigate();
   const [numPlayers, setNumPlayers] = useState(4);
   const [started, setStarted] = useState(false);
-  const { state, currentColor, startGame, rollDice, selectToken } = useLudo(numPlayers);
+  const { state, current, start, roll, select } = useLudo(numPlayers);
 
   const handleStart = (n) => {
     setNumPlayers(n);
     setStarted(true);
-    startGame(n);
+    start(n);
   };
 
   if (!started) return <SetupScreen onStart={handleStart} />;
 
-  const activePlayers = state.turnOrder || COLORS.slice(0, numPlayers);
-  const canRoll = !state.diceRolled && state.phase === 'playing';
-  const curP = currentColor ? PC[currentColor] : null;
+  const activePlayers = state.order || COLORS.slice(0, numPlayers);
+  const canRoll = !state.rolled && state.phase === 'playing';
+  const curP = current ? PC[current] : null;
 
   return (
     <div style={{
@@ -252,7 +252,7 @@ export default function LudoGame() {
         {activePlayers.map(color => (
           <PlayerChip
             key={color} color={color}
-            isCurrent={color === currentColor && state.phase === 'playing'}
+            isCurrent={color === current && state.phase === 'playing'}
             tokens={state.players[color].tokens}
           />
         ))}
@@ -273,7 +273,7 @@ export default function LudoGame() {
           aspectRatio:'1',
         }}>
           <div style={{ width:'100%', height:'100%', borderRadius:8, overflow:'hidden' }}>
-            <LudoBoard state={state} currentColor={currentColor} onSelectToken={selectToken} />
+            <LudoBoard state={state} current={current} onSelect={select} />
           </div>
         </div>
       </div>
@@ -301,9 +301,9 @@ export default function LudoGame() {
                     {curP.name}'s Turn
                   </div>
                   <div style={{ fontSize:10, color: `${curP.text}aa` }}>
-                    {state.diceRolled && state.moveableTokens.length > 0
+                    {state.rolled && state.canMove.length > 0
                       ? '👆 Select a token'
-                      : state.diceRolled && state.moveableTokens.length === 0
+                      : state.rolled && state.canMove.length === 0
                       ? '⏭ No moves — passing'
                       : '🎲 Roll the dice'}
                   </div>
@@ -316,8 +316,8 @@ export default function LudoGame() {
           <LudoDice
             value={state.dice}
             canRoll={canRoll}
-            onRoll={rollDice}
-            currentColor={currentColor}
+            onRoll={roll}
+            currentColor={current}
           />
         </div>
       </div>
@@ -326,7 +326,7 @@ export default function LudoGame() {
       {state.phase === 'over' && state.winner && (
         <GameOverModal
           winner={state.winner}
-          onRestart={() => startGame(numPlayers)}
+          onRestart={() => start(numPlayers)}
           onHome={() => navigate('/')}
         />
       )}

@@ -1,79 +1,48 @@
-import {
-  COLORS, COLOR_CONFIG, MAIN_PATH, HOME_STRETCH,
-  SAFE_SQUARES, TOKENS_PER_PLAYER, MAIN_PATH_LEN,
-  HOME_STRETCH_LEN, TOKEN_BASE, TOKEN_COMPLETE,
-} from './ludoConstants';
+import { COLORS, PLAYER_PATH, HOME_STRETCH, SAFE_POS, TOKENS_PER_PLAYER, PATH_LEN, HS_LEN, BASE, DONE } from './ludoConstants';
 
-/** Absolute main-path index for a given color + relative position */
-export function absIdx(color, relPos) {
-  return (COLOR_CONFIG[color].entryIdx + relPos) % MAIN_PATH_LEN;
+export function getCoords(color, pos) {
+  if (pos === BASE || pos === DONE) return null;
+  if (pos >= PATH_LEN) return HOME_STRETCH[color]?.[pos - PATH_LEN] ?? null;
+  return PLAYER_PATH[color][pos] ?? null;
 }
 
-/** Get [row, col] for rendering a token */
-export function getTokenCoords(color, position) {
-  if (position === TOKEN_BASE || position === TOKEN_COMPLETE) return null;
-  if (position >= MAIN_PATH_LEN) {
-    const hsIdx = position - MAIN_PATH_LEN;
-    return HOME_STRETCH[color]?.[hsIdx] ?? null;
-  }
-  return MAIN_PATH[absIdx(color, position)] ?? null;
+export function isSafe(pos) {
+  return pos >= 0 && pos < PATH_LEN && SAFE_POS.has(pos);
 }
 
-/** Is the current main-path cell a safe square? */
-export function isSafe(color, position) {
-  if (position < 0 || position >= MAIN_PATH_LEN) return false;
-  return SAFE_SQUARES.has(absIdx(color, position));
+export function canMove(pos, dice) {
+  if (pos === DONE) return false;
+  if (pos === BASE) return dice === 6;
+  return pos + dice <= PATH_LEN + HS_LEN;
 }
 
-/** Can this token legally move by `dice` steps? */
-export function canMove(position, dice) {
-  if (position === TOKEN_COMPLETE) return false;
-  if (position === TOKEN_BASE) return dice === 6;
-  const newPos = position + dice;
-  return newPos <= MAIN_PATH_LEN + HOME_STRETCH_LEN;
+export function nextPos(pos, dice) {
+  if (pos === BASE) return 0;
+  const n = pos + dice;
+  return n >= PATH_LEN + HS_LEN ? DONE : n;
 }
 
-/** New position after moving `dice` steps */
-export function calcNewPos(position, dice) {
-  if (position === TOKEN_BASE && dice === 6) return 0;
-  const next = position + dice;
-  return next === MAIN_PATH_LEN + HOME_STRETCH_LEN ? TOKEN_COMPLETE : next;
-}
-
-/** Find an opponent token sitting on `targetCoords` (eligible for capture) */
-export function findCapture(players, currentColor, targetCoords, targetPos) {
-  if (!targetCoords) return null;
-  if (isSafe(currentColor, targetPos)) return null;
+export function findCapture(players, myColor, myNewPos) {
+  if (myNewPos >= PATH_LEN || isSafe(myNewPos)) return null;
+  const myCoords = getCoords(myColor, myNewPos);
+  if (!myCoords) return null;
   for (const color of COLORS) {
-    if (color === currentColor) continue;
+    if (color === myColor) continue;
     for (let i = 0; i < TOKENS_PER_PLAYER; i++) {
-      const pos = players[color].tokens[i];
-      if (pos === TOKEN_BASE || pos === TOKEN_COMPLETE) continue;
-      // Only capture on main path
-      if (pos >= MAIN_PATH_LEN) continue;
-      const coords = getTokenCoords(color, pos);
-      if (coords && coords[0] === targetCoords[0] && coords[1] === targetCoords[1]) {
-        if (isSafe(color, pos)) continue; // occupier is safe
-        return { color, tokenIdx: i };
-      }
+      const p = players[color].tokens[i];
+      if (p === BASE || p === DONE || p >= PATH_LEN) continue;
+      if (isSafe(p)) continue;
+      const c = getCoords(color, p);
+      if (c && c[0] === myCoords[0] && c[1] === myCoords[1])
+        return { color, idx: i };
     }
   }
   return null;
 }
 
-/** Indices of moveable tokens for current player */
-export function getMoveableTokens(player, dice) {
-  return player.tokens.reduce((acc, pos, i) => {
-    if (canMove(pos, dice)) acc.push(i);
-    return acc;
-  }, []);
+export function moveable(tokens, dice) {
+  return tokens.reduce((a, p, i) => { if (canMove(p, dice)) a.push(i); return a; }, []);
 }
 
-/** All tokens complete? */
-export function isWinner(tokens) {
-  return tokens.every(t => t === TOKEN_COMPLETE);
-}
-
-export function rollDice() {
-  return Math.floor(Math.random() * 6) + 1;
-}
+export function won(tokens) { return tokens.every(t => t === DONE); }
+export function rollDice() { return Math.floor(Math.random() * 6) + 1; }

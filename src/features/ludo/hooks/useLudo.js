@@ -1,42 +1,22 @@
-import { useReducer, useCallback, useEffect, useRef } from 'react';
-import { ludoReducer, getInitialState, ACTIONS } from '../state/ludoReducer';
+import { useReducer, useEffect, useRef, useCallback } from 'react';
+import { reducer, init, A } from '../state/ludoReducer';
 
-export function useLudo(numPlayers = 4) {
-  const [state, dispatch] = useReducer(ludoReducer, getInitialState(numPlayers));
-  const autoNextRef = useRef(null);
+export function useLudo(n=4) {
+  const [s, d] = useReducer(reducer, init(n));
+  const t = useRef();
 
-  const startGame = useCallback((n = numPlayers) => {
-    dispatch({ type: ACTIONS.START_GAME, payload: { numPlayers: n } });
-  }, [numPlayers]);
-
-  const rollDice = useCallback(() => {
-    if (state.diceRolled || state.phase !== 'playing') return;
-    dispatch({ type: ACTIONS.ROLL_DICE });
-  }, [state.diceRolled, state.phase]);
-
-  const selectToken = useCallback((tokenIdx) => {
-    if (!state.diceRolled || state.phase !== 'playing') return;
-    dispatch({ type: ACTIONS.SELECT_TOKEN, payload: { tokenIdx } });
-  }, [state.diceRolled, state.phase]);
-
-  // Auto-advance turn when no moves available
   useEffect(() => {
-    if (state._autoNext) {
-      if (autoNextRef.current) clearTimeout(autoNextRef.current);
-      autoNextRef.current = setTimeout(() => {
-        dispatch({ type: ACTIONS.NEXT_TURN, payload: { nextTurn: state.nextTurn } });
-      }, 1200);
+    if (s._auto) {
+      t.current = setTimeout(() => d({type:A.NEXT, t:s._next}), 1100);
+      return () => clearTimeout(t.current);
     }
-    return () => clearTimeout(autoNextRef.current);
-  }, [state._autoNext, state.nextTurn]);
-
-  const currentColor = state.turnOrder?.[state.currentTurn] ?? null;
+  }, [s._auto, s._next]);
 
   return {
-    state,
-    currentColor,
-    startGame,
-    rollDice,
-    selectToken,
+    state: s,
+    current: s.order[s.turn] ?? null,
+    start:  useCallback((n)=>d({type:A.START,n}), []),
+    roll:   useCallback(()=>d({type:A.ROLL}), []),
+    select: useCallback((idx)=>d({type:A.SELECT,idx}), []),
   };
 }
