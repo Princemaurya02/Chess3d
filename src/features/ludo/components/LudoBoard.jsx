@@ -1,236 +1,245 @@
 import React, { memo } from 'react';
 import {
   MAIN_PATH, HOME_STRETCH, BASE_POSITIONS,
-  SAFE_SQUARES, COLOR_CONFIG, COLORS, TOKENS_PER_PLAYER, TOKEN_BASE, TOKEN_COMPLETE,
+  SAFE_SQUARES, COLOR_CONFIG, COLORS, TOKENS_PER_PLAYER,
+  TOKEN_BASE, TOKEN_COMPLETE,
 } from '../engine/ludoConstants';
 import { getAbsoluteIndex, getTokenCoords } from '../engine/ludoEngine';
 
-// ─── Color palettes ───────────────────────────────────────────────────────────
-const CELL_COLORS = {
+// ─── Vibrant colors matching traditional Ludo board ──────────────────────────
+const BG = {
   red:    '#e53935',
-  green:  '#43a047',
+  green:  '#2e7d32',
   yellow: '#f9a825',
-  blue:   '#1e88e5',
-  light:  '#f5f0e8',
-  safe:   '#b8f7b0',
+  blue:   '#1565c0',
+  path:   '#ffffff',
+  border: '#1565c0',
+  safe:   '#a5d6a7',
+  center: '#ffffff',
 };
 
-const TOKEN_STYLE = {
-  red:    { bg: '#e53935', border: '#b71c1c' },
-  green:  { bg: '#43a047', border: '#1b5e20' },
-  yellow: { bg: '#f9a825', border: '#e65100' },
-  blue:   { bg: '#1e88e5', border: '#0d47a1' },
+const TOKEN_COLORS = {
+  red:    { fill:'#e53935', stroke:'#b71c1c', shadow:'rgba(229,57,53,0.6)' },
+  green:  { fill:'#43a047', stroke:'#1b5e20', shadow:'rgba(67,160,71,0.6)' },
+  yellow: { fill:'#fdd835', stroke:'#f57f17', shadow:'rgba(253,216,53,0.6)' },
+  blue:   { fill:'#1e88e5', stroke:'#0d47a1', shadow:'rgba(30,136,229,0.6)' },
 };
 
-// ─── Single board cell ────────────────────────────────────────────────────────
-const Cell = memo(({ row, col, bg, children, onClick, highlight }) => (
-  <div
-    onClick={onClick}
-    style={{
-      gridRow: row + 1,
-      gridColumn: col + 1,
-      background: highlight ? 'rgba(255,255,100,0.6)' : bg,
-      border: '0.5px solid rgba(0,0,0,0.12)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: onClick ? 'pointer' : 'default',
-      position: 'relative',
-      transition: 'background 0.2s',
-      borderRadius: 2,
-    }}
-  >
-    {children}
-  </div>
-));
-
-// ─── Token circle ─────────────────────────────────────────────────────────────
-const Token = memo(({ color, isSelectable, isSelected, onClick }) => {
-  const style = TOKEN_STYLE[color];
+// ─── Token SVG circle ────────────────────────────────────────────────────────
+const Token = memo(({ color, isSelectable, isSelected, onClick, size = 68 }) => {
+  const c = TOKEN_COLORS[color];
+  const s = size;
   return (
-    <div
+    <svg
+      width={`${s}%`} height={`${s}%`}
+      viewBox="0 0 40 40"
       onClick={onClick}
       style={{
-        width: '70%',
-        height: '70%',
-        borderRadius: '50%',
-        background: style.bg,
-        border: `2px solid ${style.border}`,
         cursor: isSelectable ? 'pointer' : 'default',
-        boxShadow: isSelected
-          ? `0 0 0 3px #fff, 0 0 0 5px ${style.bg}`
+        filter: isSelected
+          ? `drop-shadow(0 0 4px ${c.shadow}) drop-shadow(0 0 8px ${c.shadow})`
           : isSelectable
-          ? `0 0 8px rgba(255,255,255,0.7)`
-          : '0 1px 3px rgba(0,0,0,0.4)',
-        transform: isSelected ? 'scale(1.25)' : isSelectable ? 'scale(1.1)' : 'scale(1)',
-        transition: 'all 0.15s ease',
+          ? `drop-shadow(0 0 3px ${c.shadow})`
+          : 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))',
+        transform: isSelected ? 'scale(1.25)' : isSelectable ? 'scale(1.12)' : 'scale(1)',
+        transition: 'transform 0.15s, filter 0.15s',
         zIndex: isSelected ? 10 : 1,
       }}
-    />
+    >
+      {/* Outer ring */}
+      <circle cx="20" cy="20" r="18" fill={c.stroke} />
+      {/* Main body */}
+      <circle cx="20" cy="20" r="15" fill={c.fill} />
+      {/* Highlight */}
+      <circle cx="14" cy="13" r="5" fill="rgba(255,255,255,0.35)" />
+      {/* Center dot */}
+      <circle cx="20" cy="20" r="4" fill={c.stroke} />
+    </svg>
   );
 });
 
-// ─── Safe square star ────────────────────────────────────────────────────────
-const SafeStar = () => (
-  <span style={{ fontSize: 8, opacity: 0.5, pointerEvents: 'none', position: 'absolute' }}>⭐</span>
-);
-
-// ─── Home quadrant (colored corner) ──────────────────────────────────────────
-function HomeQuadrant({ color, tokens, moveableTokens, selectedToken, onSelectToken }) {
-  const cfg = COLOR_CONFIG[color];
-  const [rMin, rMax] = cfg.home.rows;
-  const [cMin, cMax] = cfg.home.cols;
-  const bases = BASE_POSITIONS[color];
-
+// ─── Diamond pattern inside home quad ────────────────────────────────────────
+function HomeDiamond({ color }) {
+  const c = TOKEN_COLORS[color];
   return (
-    <>
-      {/* Colored background fill */}
-      {Array.from({ length: rMax - rMin + 1 }, (_, ri) =>
-        Array.from({ length: cMax - cMin + 1 }, (_, ci) => {
-          const r = rMin + ri;
-          const c = cMin + ci;
-          const key = `home-${color}-${r}-${c}`;
-          // Inner 4×4 is lighter
-          const isInner = ri >= 1 && ri <= 4 && ci >= 1 && ci <= 4;
-          return (
-            <Cell key={key} row={r} col={c} bg={isInner ? '#f5f0e8' : CELL_COLORS[color]}>
-              {/* Base slots */}
-              {bases.map((pos, i) => {
-                if (pos[0] !== r || pos[1] !== c) return null;
-                const tokenHere = tokens[i] === TOKEN_BASE;
-                if (!tokenHere) return null;
-                const isSelectable = moveableTokens.includes(i);
-                const isSelected = selectedToken === i;
-                return (
-                  <Token
-                    key={i}
-                    color={color}
-                    isSelectable={isSelectable}
-                    isSelected={isSelected}
-                    onClick={isSelectable ? () => onSelectToken(i) : undefined}
-                  />
-                );
-              })}
-            </Cell>
-          );
-        })
-      )}
-    </>
+    <svg viewBox="0 0 30 30" width="70%" height="70%" style={{ opacity: 0.4 }}>
+      <rect x="5" y="5" width="20" height="20" rx="2" fill={c.fill}
+        transform="rotate(45 15 15)" />
+    </svg>
   );
 }
 
-// ─── Build a map of tokens on main path + home stretch ───────────────────────
+// ─── Build token map: cell key → { tokenEls, count } ────────────────────────
 function buildTokenMap(players, moveableTokens, selectedToken, currentColor, onSelectToken) {
-  const cells = {}; // key: "r,c" → array of token elements
-
+  const cells = {};
   COLORS.forEach(color => {
     const player = players[color];
-    const isCurrentPlayer = color === currentColor;
-
     player.tokens.forEach((pos, i) => {
       if (pos === TOKEN_BASE || pos === TOKEN_COMPLETE) return;
       const coords = getTokenCoords(color, pos);
       if (!coords) return;
-      const [r, c] = coords;
-      const key = `${r},${c}`;
+      const key = `${coords[0]},${coords[1]}`;
       if (!cells[key]) cells[key] = [];
-
-      const isSelectable = isCurrentPlayer && moveableTokens.includes(i);
-      const isSelected = isCurrentPlayer && selectedToken === i;
-      cells[key].push(
-        <Token
-          key={`${color}-${i}`}
-          color={color}
-          isSelectable={isSelectable}
-          isSelected={isSelected}
-          onClick={isSelectable ? () => onSelectToken(i) : undefined}
-        />
-      );
+      const isSelectable = color === currentColor && moveableTokens.includes(i);
+      const isSelected   = color === currentColor && selectedToken === i;
+      cells[key].push({ color, idx: i, isSelectable, isSelected });
     });
   });
-
   return cells;
 }
 
-// ─── Get background for a main-path cell ─────────────────────────────────────
-function getPathCellBg(r, c) {
-  // Home stretch cells — colored by player
-  for (const color of COLORS) {
-    const stretch = HOME_STRETCH[color];
-    for (const [sr, sc] of stretch) {
-      if (sr === r && sc === c) return CELL_COLORS[color] + '66'; // semi-transparent
-    }
-  }
-  // Safe squares
-  for (let i = 0; i < MAIN_PATH.length; i++) {
-    if (MAIN_PATH[i][0] === r && MAIN_PATH[i][1] === c && SAFE_SQUARES.has(i)) return CELL_COLORS.safe;
-  }
-  // Check if entry point (colored)
+// ─── Single grid cell ─────────────────────────────────────────────────────────
+function Cell({ row, col, bg, border, children, onClick, pulsing }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        gridRow: row + 1, gridColumn: col + 1,
+        background: bg,
+        border: `0.8px solid ${border || 'rgba(0,0,0,0.18)'}`,
+        display: 'flex', flexWrap: 'wrap',
+        alignItems: 'center', justifyContent: 'center',
+        position: 'relative', overflow: 'hidden',
+        cursor: onClick ? 'pointer' : 'default',
+        animation: pulsing ? 'pulse 1s infinite' : 'none',
+        boxSizing: 'border-box',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── Arrow character for path direction ──────────────────────────────────────
+const DIRECTION_ARROWS = {
+  right: '›', left: '‹', up: '∧', down: '∨',
+};
+
+function pathCellBg(r, c) {
   for (const color of COLORS) {
     const entry = COLOR_CONFIG[color].entryIdx;
-    if (MAIN_PATH[entry][0] === r && MAIN_PATH[entry][1] === c) return CELL_COLORS[color] + '99';
+    const [er, ec] = MAIN_PATH[entry];
+    if (er === r && ec === c) return { bg: BG[color], isEntry: true, color };
   }
-  return CELL_COLORS.light;
-}
-
-// ─── Is safe square (for star rendering) ─────────────────────────────────────
-function isMainPathSafe(r, c) {
+  for (const color of COLORS) {
+    for (const [sr, sc] of HOME_STRETCH[color]) {
+      if (sr === r && sc === c) return { bg: BG[color] + '55', isStretch: true, color };
+    }
+  }
   for (let i = 0; i < MAIN_PATH.length; i++) {
-    if (MAIN_PATH[i][0] === r && MAIN_PATH[i][1] === c && SAFE_SQUARES.has(i)) return true;
+    if (MAIN_PATH[i][0] === r && MAIN_PATH[i][1] === c && SAFE_SQUARES.has(i)) {
+      return { bg: BG.safe, isSafe: true };
+    }
   }
-  return false;
+  return { bg: BG.path };
 }
 
-// ─── Main Board Component ─────────────────────────────────────────────────────
+// ─── Main Board ───────────────────────────────────────────────────────────────
 export default memo(function LudoBoard({ state, currentColor, onSelectToken }) {
   const { players, moveableTokens, selectedToken } = state;
   const tokenMap = buildTokenMap(players, moveableTokens, selectedToken, currentColor, onSelectToken);
 
-  // All cells: 15×15
+  const isInHomeQuad = (r, c) =>
+    (r<=5&&c<=5) || (r<=5&&c>=9) || (r>=9&&c<=5) || (r>=9&&c>=9);
+
   const cells = [];
 
-  // Home quadrants
+  // ── Home quadrants ──
   for (const color of COLORS) {
-    cells.push(
-      <HomeQuadrant
-        key={`home-${color}`}
-        color={color}
-        tokens={players[color].tokens}
-        moveableTokens={currentColor === color ? moveableTokens : []}
-        selectedToken={currentColor === color ? selectedToken : null}
-        onSelectToken={onSelectToken}
-      />
-    );
+    const cfg = COLOR_CONFIG[color];
+    const [rMin, rMax] = cfg.home.rows;
+    const [cMin, cMax] = cfg.home.cols;
+
+    for (let ri = rMin; ri <= rMax; ri++) {
+      for (let ci = cMin; ci <= cMax; ci++) {
+        // Outer ring = solid color
+        const isOuter = ri === rMin || ri === rMax || ci === cMin || ci === cMax;
+        // Inner 4×4 is lighter with diamond pattern
+        const isInner = ri >= rMin+1 && ri <= rMax-1 && ci >= cMin+1 && ci <= cMax-1;
+        // Base token slots (2×2 grids in the inner area)
+        const basePos = BASE_POSITIONS[color];
+        const baseIdx = basePos.findIndex(([br, bc]) => br === ri && bc === ci);
+
+        let bg = isOuter ? BG[color] : isInner ? '#ffffffcc' : BG[color] + 'aa';
+
+        cells.push(
+          <Cell key={`h-${color}-${ri}-${ci}`} row={ri} col={ci} bg={bg}
+            border={isOuter ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)'}
+          >
+            {isInner && baseIdx === -1 && <HomeDiamond color={color} />}
+            {baseIdx !== -1 && (() => {
+              const pos = players[color].tokens[baseIdx];
+              if (pos !== TOKEN_BASE) return null;
+              const isSel = color === currentColor && moveableTokens.includes(baseIdx);
+              const isSeld = color === currentColor && selectedToken === baseIdx;
+              return (
+                <Token color={color} isSelectable={isSel} isSelected={isSeld}
+                  size={80}
+                  onClick={isSel ? () => onSelectToken(baseIdx) : undefined}
+                />
+              );
+            })()}
+          </Cell>
+        );
+      }
+    }
   }
 
-  // Center star (winning zone)
-  cells.push(
-    <Cell key="center" row={7} col={7} bg="linear-gradient(135deg,#e53935,#43a047,#f9a825,#1e88e5)">
-      <span style={{ fontSize: 14 }}>⭐</span>
-    </Cell>
-  );
+  // ── Center 3×3 ──
+  // Each of the 4 arms of the center colored
+  const centerColorMap = {
+    '6,7': 'green', '7,6': 'yellow', '8,7': 'red', '7,8': 'blue',
+  };
+  for (let r = 6; r <= 8; r++) {
+    for (let c = 6; c <= 8; c++) {
+      const key = `${r},${c}`;
+      const armColor = centerColorMap[key];
+      const isCenter = r === 7 && c === 7;
+      cells.push(
+        <Cell key={`c-${r}-${c}`} row={r} col={c}
+          bg={isCenter ? 'conic-gradient(#e53935 0deg 90deg,#2e7d32 90deg 180deg,#1565c0 180deg 270deg,#f9a825 270deg 360deg)'
+                       : armColor ? BG[armColor] : BG.path}
+          border="rgba(0,0,0,0.15)"
+        >
+          {isCenter && <span style={{ fontSize: '60%', zIndex: 2 }}>⭐</span>}
+        </Cell>
+      );
+    }
+  }
 
-  // Path cells and home stretch cells (non-home-quadrant cells)
-  const homeRanges = [
-    [0,5,9,14],[0,5,0,5],[9,14,0,5],[9,14,9,14],
-  ];
-  const isInHome = (r, c) =>
-    homeRanges.some(([r1,r2,c1,c2]) => r>=r1&&r<=r2&&c>=c1&&c<=c2);
-
+  // ── Path cells ──
   for (let r = 0; r < 15; r++) {
     for (let c = 0; c < 15; c++) {
-      if (isInHome(r, c)) continue;
-      if (r === 7 && c === 7) continue; // center already added
-      const bg = getPathCellBg(r, c);
-      const key = `${r},${c}`;
-      const tokensHere = tokenMap[key] || [];
-      const safe = isMainPathSafe(r, c);
+      if (isInHomeQuad(r, c)) continue;
+      if (r >= 6 && r <= 8 && c >= 6 && c <= 8) continue; // center handled above
+
+      const cellKey = `${r},${c}`;
+      const { bg, isSafe, isEntry, isStretch, color: cellColor } = pathCellBg(r, c);
+      const tokensHere = tokenMap[cellKey] || [];
+
       cells.push(
-        <Cell key={key} row={r} col={c} bg={bg}>
-          {safe && <SafeStar />}
-          <div style={{ display:'flex', flexWrap:'wrap', width:'100%', height:'100%', alignItems:'center', justifyContent:'center', gap: tokensHere.length > 1 ? 1 : 0 }}>
-            {tokensHere}
-          </div>
+        <Cell key={cellKey} row={r} col={c} bg={bg}
+          border={isEntry ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.12)'}
+        >
+          {isSafe && tokensHere.length === 0 && (
+            <span style={{ fontSize: '50%', opacity: 0.7 }}>⭐</span>
+          )}
+          {tokensHere.length > 0 && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap',
+              width: '100%', height: '100%',
+              alignItems: 'center', justifyContent: 'center',
+              gap: 1,
+            }}>
+              {tokensHere.map(({ color, idx, isSelectable, isSelected }) => (
+                <Token key={`${color}-${idx}`} color={color}
+                  isSelectable={isSelectable} isSelected={isSelected}
+                  size={tokensHere.length > 1 ? 48 : 72}
+                  onClick={isSelectable ? () => onSelectToken(idx) : undefined}
+                />
+              ))}
+            </div>
+          )}
         </Cell>
       );
     }
@@ -241,15 +250,13 @@ export default memo(function LudoBoard({ state, currentColor, onSelectToken }) {
       display: 'grid',
       gridTemplateColumns: 'repeat(15, 1fr)',
       gridTemplateRows: 'repeat(15, 1fr)',
-      width: 'min(94vw, 94vh - 200px)',
-      height: 'min(94vw, 94vh - 200px)',
-      maxWidth: 480,
-      maxHeight: 480,
-      border: '3px solid rgba(201,168,76,0.4)',
-      borderRadius: 8,
+      width: '100%', height: '100%',
+      borderRadius: 6,
       overflow: 'hidden',
-      boxShadow: '0 0 40px rgba(0,0,0,0.7)',
-      margin: '0 auto',
+      border: '4px solid #1565c0',
+      outline: '2px solid #e53935',
+      boxShadow: '0 0 0 4px #f9a825, 0 8px 40px rgba(0,0,0,0.6)',
+      background: BG.path,
     }}>
       {cells}
     </div>
