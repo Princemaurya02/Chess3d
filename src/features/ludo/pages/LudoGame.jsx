@@ -21,7 +21,7 @@ function TokenPips({ tokens, color }) {
       {tokens.map((t, i) => (
         <div key={i} style={{
           width: 8, height: 8, borderRadius:'50%',
-          background: t === TOKEN_COMPLETE ? PC[color].light : 'rgba(255,255,255,0.2)',
+          background: t === DONE ? PC[color].light : 'rgba(255,255,255,0.2)',
           border: '1px solid rgba(255,255,255,0.4)',
           transition: 'background 0.3s',
         }} />
