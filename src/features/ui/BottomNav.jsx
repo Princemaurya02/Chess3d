@@ -1,10 +1,9 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { GiChessKnight, GiDiceSixFacesSix } from 'react-icons/gi';
+import { GiChessKnight } from 'react-icons/gi';
 import { IoSettings, IoPerson, IoGlobe } from 'react-icons/io5';
 
 const NAV_ITEMS = [
-  { path: '/',         icon: <GiChessKnight />, label: 'Chess'   },
-  { path: '/ludo',     icon: <GiDiceSixFacesSix />, label: 'Ludo' },
+  { path: '/',         icon: <GiChessKnight />, label: 'Play'    },
   { path: '/online',   icon: <IoGlobe />,       label: 'Online'  },
   { path: '/settings', icon: <IoSettings />,    label: 'Settings'},
   { path: '/profile',  icon: <IoPerson />,      label: 'Profile' },

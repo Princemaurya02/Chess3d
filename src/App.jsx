@@ -6,7 +6,6 @@ import GameScreen from './screens/GameScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import OnlineScreen from './screens/OnlineScreen';
-import LudoGame from './features/ludo/pages/LudoGame';
 
 function RoomDetector() {
   const [searchParams] = useSearchParams();
@@ -21,7 +20,7 @@ function RoomDetector() {
 
 function AppContent() {
   const { pathname } = useLocation();
-  const isFullscreen = pathname === '/game' || pathname === '/ludo';
+  const isFullscreen = pathname === '/game';
 
   return (
     <div className="app-shell">
@@ -30,7 +29,6 @@ function AppContent() {
         <Route path="/"         element={<HomeScreen />} />
         <Route path="/game"     element={<GameScreen />} />
         <Route path="/online"   element={<OnlineScreen />} />
-        <Route path="/ludo"     element={<LudoGame />} />
         <Route path="/settings" element={<SettingsScreen />} />
         <Route path="/profile"  element={<ProfileScreen />} />
       </Routes>
