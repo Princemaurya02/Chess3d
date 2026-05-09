@@ -180,8 +180,8 @@ export default function HomeScreen() {
                 fontSize: 26, boxShadow: `0 4px 16px ${glow}`,
               }}>{icon}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 3 }}>{title}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{desc}</div>
+                <div style={{ fontWeight: 800, fontSize: 16, fontFamily: 'Inter,sans-serif', marginBottom: 4, color: '#f0f0ff' }}>{title}</div>
+                <div style={{ fontSize: 12, color: '#8888bb', lineHeight: 1.4 }}>{desc}</div>
                 <span className={`badge ${badgeClass}`} style={{ marginTop: 8, display: 'inline-block' }}>{badge}</span>
               </div>
               <span style={{ color: 'var(--text-muted)', fontSize: 22, opacity: 0.5 }}>›</span>
